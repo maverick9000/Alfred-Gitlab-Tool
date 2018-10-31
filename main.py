@@ -2,7 +2,7 @@
 from os import sys, path
 import sys
 import argparse
-from gitlab import get_gitlab_issue, get_gitlab_merge_requests
+from gitlab import get_gitlab_issue, get_gitlab_merge_requests, get_gitlab_myissue, get_gitlab_issue_created, get_gitlab_todo
 from workflow import Workflow3, ICON_WEB, ICON_WARNING, ICON_INFO, web, PasswordNotFound
 from workflow.background import run_in_background, is_running
 
@@ -41,19 +41,41 @@ def save_gitlab_url(wf, url):
     wf.save_password('gitlab_url', url)
 
 
-def open_gitlab_todo(wf):
+def open_gitlab_todo(wf, query):
     """
-    open gitlab todos url in default browser
+    open gitlab todos
     :param wf:
+    :param query:
     :return:
     """
-    url_todo = wf.get_password('gitlab_url').replace('/api/v4', '') + '/dashboard/todos'
-    wf.add_item(title='Open gitlab todo in default browser',
-                arg=url_todo,
-                valid=True,
-                icon=None)
+    query = query.encode('utf-8')
+    log.info(query)
+    gitlab_token = wf.get_password('gitlab_token')
+    gitlab_url = wf.get_password('gitlab_url')
+    issues = get_gitlab_todo(gitlab_url, gitlab_token, query, 1, [])
+    if not issues:
+        wf.add_item('No issues found', icon=ICON_WARNING)
+        wf.send_feedback()
+        return 0
+    
+    for issue in issues:
+        log.info(issue)
+        author = issue['author']
+        target = issue['target']
+        log.info('who:{}'.format(author['name']))
+        log.info('what:{}'.format(issue['action_name']))
+        log.info('target:{}'.format(target))
+        where = target["title"].encode('ascii',errors='ignore')
+        log.info('where:{}'.format(where))
+        title = "{} {}".format(author['name'],issue['action_name'])
+        log.info(title)
+        wf.add_item(title=title,
+                    subtitle=where,
+                    arg=target['web_url'],
+                    valid=True,
+                    icon=None)
+                    # uid=issue['id'])
     wf.send_feedback()
-
 
 def search_gitlab_repo(wf, query):
     """
@@ -117,6 +139,57 @@ def query_gitlab_issue(wf, query):
                     uid=issue['id'])
     wf.send_feedback()
 
+def query_gitlab_issue_created(wf, query):
+    """
+    query gitlab issues created by me
+    :param wf:
+    :param query:
+    :return:
+    """
+    query = query.encode('utf-8')
+    gitlab_token = wf.get_password('gitlab_token')
+    gitlab_url = wf.get_password('gitlab_url')
+    issues = get_gitlab_issue_created(gitlab_url, gitlab_token, query, 1, [])
+
+    if not issues:
+        wf.add_item('No issues found', icon=ICON_WARNING)
+        wf.send_feedback()
+        return 0
+
+    for issue in issues:
+        wf.add_item(title=issue['title'],
+                    subtitle=issue['description'],
+                    arg=issue['web_url'],
+                    valid=True,
+                    icon=None,
+                    uid=issue['id'])
+    wf.send_feedback()
+
+def query_gitlab_myissue(wf, query):
+    """
+    query gitlab issues
+    :param wf:
+    :param query:
+    :return:
+    """
+    query = query.encode('utf-8')
+    gitlab_token = wf.get_password('gitlab_token')
+    gitlab_url = wf.get_password('gitlab_url')
+    issues = get_gitlab_myissue(gitlab_url, gitlab_token, query, 1, [])
+
+    if not issues:
+        wf.add_item('No issues found', icon=ICON_WARNING)
+        wf.send_feedback()
+        return 0
+
+    for issue in issues:
+        wf.add_item(title=issue['title'],
+                    subtitle=issue['description'],
+                    arg=issue['web_url'],
+                    valid=True,
+                    icon=None,
+                    uid=issue['id'])
+    wf.send_feedback()
 
 def get_gitlab_mr_assigned(wf):
     gitlab_token = wf.get_password('gitlab_token')
@@ -144,11 +217,15 @@ def main(wf):
     parser.add_argument('--url', dest='url', nargs='?', default=None)
     parser.add_argument('--repo', dest='repo', nargs='?', default=None)
     parser.add_argument('--issue', dest='issue', nargs='?', default=None)
+    parser.add_argument('--myissue', dest='myissue', nargs='?', default=None)
     parser.add_argument('--merge', dest='merge', action='store_true', default=False)
-    parser.add_argument('--todo', dest='todo', action='store_true', default=False)
+    parser.add_argument('--todo', dest='todo', nargs='?', default=None)
+    parser.add_argument('--created', dest='created', nargs='?', default=None)
     parser.add_argument('query', nargs='?', default=None)
     args = parser.parse_args(wf.args)
     log.info(args)
+    log.info(args.todo)
+    log.info(args.issue)
 
     if args.token:
         save_gitlab_token(wf, args.token)
@@ -159,7 +236,7 @@ def main(wf):
         return 0
 
     if args.todo:
-        open_gitlab_todo(wf)
+        open_gitlab_todo(wf, args.todo)
         return 0
 
     if args.repo:
@@ -168,6 +245,14 @@ def main(wf):
 
     if args.issue:
         query_gitlab_issue(wf, args.issue)
+        return 0
+
+    if args.myissue:
+        query_gitlab_myissue(wf, args.myissue)
+        return 0
+
+    if args.created:
+        query_gitlab_issue_created(wf, args.created)
         return 0
 
     if args.merge:
