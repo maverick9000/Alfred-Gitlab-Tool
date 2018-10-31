@@ -77,17 +77,20 @@ def get_gitlab_todo(url, token, query, page, result):
         result = get_gitlab_issue(url, token, query, next_page, result)
     return result
 
-def get_gitlab_merge_requests(url, token, page, result):
+def get_gitlab_merge_requests(url, token, query, page, result):
     if page == 1:
-        url = url.encode('utf-8') + '/merge_requests'
+        url = url.encode('utf-8') + '/merge_requests?state=opened&scope=assigned_to_me'
     params = dict(private_token=token,
                   per_page=100,
                   page=page,
                   scope='assigned_to_me',
                   state='opened')
+    Workflow3().logger.info(url)
+    params = dict(private_token=token, per_page=100, page=page)
     r = web.get(url, params)
     r.raise_for_status()
     result = result + r.json()
+    Workflow3().logger.info(result)
     next_page = r.headers.get('X-Next-Page')
     if next_page:
         get_gitlab_merge_requests(url, token, query, next_page, result)

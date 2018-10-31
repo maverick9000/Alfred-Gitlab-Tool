@@ -191,10 +191,11 @@ def query_gitlab_myissue(wf, query):
                     uid=issue['id'])
     wf.send_feedback()
 
-def get_gitlab_mr_assigned(wf):
+def get_gitlab_mr_assigned(wf, query):
     gitlab_token = wf.get_password('gitlab_token')
     gitlab_url = wf.get_password('gitlab_url')
-    merges = get_gitlab_merge_requests(gitlab_url, gitlab_token, 1, [])
+    merges = get_gitlab_merge_requests(gitlab_url, gitlab_token, query, 1, [])
+    log.info(merges)
     if not merges:
         wf.add_item('No issues found', icon=ICON_WARNING)
         wf.send_feedback()
@@ -218,7 +219,7 @@ def main(wf):
     parser.add_argument('--repo', dest='repo', nargs='?', default=None)
     parser.add_argument('--issue', dest='issue', nargs='?', default=None)
     parser.add_argument('--myissue', dest='myissue', nargs='?', default=None)
-    parser.add_argument('--merge', dest='merge', action='store_true', default=False)
+    parser.add_argument('--merge', dest='merge', nargs='?', default=False)
     parser.add_argument('--todo', dest='todo', nargs='?', default=None)
     parser.add_argument('--created', dest='created', nargs='?', default=None)
     parser.add_argument('query', nargs='?', default=None)
@@ -256,7 +257,7 @@ def main(wf):
         return 0
 
     if args.merge:
-        get_gitlab_mr_assigned(wf)
+        get_gitlab_mr_assigned(wf, args.merge)
         return 0
 
 
